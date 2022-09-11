@@ -1,0 +1,9 @@
+.env
+.git/
+.github/
+target/
+deploy/
+tests/
+Dockerfile
+scripts/
+migrations/
