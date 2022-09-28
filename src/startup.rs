@@ -1,12 +1,12 @@
 use actix_web::dev::Server;
 use actix_web::{web, App, HttpServer};
-use sqlx::{PgPool, postgres::PgPoolOptions};
+use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
 
-use crate::configuration::{Settings, DatabaseSettings};
+use crate::configuration::{DatabaseSettings, Settings};
 use crate::email_client::EmailClient;
-use crate::routes::{health_check, subscribe, confirm};
+use crate::routes::{confirm, health_check, publish_newsletter, subscribe};
 
 pub struct Application {
     port: u16,
@@ -28,12 +28,11 @@ impl Application {
             configuration.email_client.base_url,
             sender_email,
             configuration.email_client.authorization_token,
-            timeout
+            timeout,
         );
         let address = format!(
             "{}:{}",
-            configuration.application.host,
-            configuration.application.port,
+            configuration.application.host, configuration.application.port,
         );
 
         let listener = TcpListener::bind(address)?;
@@ -57,9 +56,7 @@ impl Application {
     }
 }
 
-pub fn get_connection_pool(
-    configuration: &DatabaseSettings,
-) -> PgPool {
+pub fn get_connection_pool(configuration: &DatabaseSettings) -> PgPool {
     PgPoolOptions::new()
         .acquire_timeout(std::time::Duration::from_secs(2))
         .connect_lazy_with(configuration.with_db())
@@ -71,7 +68,7 @@ pub fn run(
     listener: TcpListener,
     db_pool: PgPool,
     email_client: EmailClient,
-    base_url: String
+    base_url: String,
 ) -> Result<Server, std::io::Error> {
     let db_pool = web::Data::new(db_pool);
     let email_client = web::Data::new(email_client);
@@ -82,6 +79,7 @@ pub fn run(
             .route("/health_check", web::get().to(health_check))
             .route("/subscriptions/confirm", web::get().to(confirm))
             .route("/subscriptions", web::post().to(subscribe))
+            .route("/newsletters", web::post().to(publish_newsletter))
             .app_data(db_pool.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())
